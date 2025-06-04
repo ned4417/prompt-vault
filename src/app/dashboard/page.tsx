@@ -11,8 +11,6 @@ import {
   DocumentTextIcon, 
   ChartBarIcon,
   BookmarkIcon,
-  CalendarIcon,
-  UserIcon,
   CogIcon
 } from '@heroicons/react/24/outline'
 import { StarIcon } from '@heroicons/react/24/solid'
@@ -50,10 +48,18 @@ export default function Dashboard() {
   const [loadingData, setLoadingData] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedPrompt, setSelectedPrompt] = useState<PurchasedPrompt | null>(null)
+  
+  // Settings form state
+  const [fullName, setFullName] = useState('')
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsMessage, setSettingsMessage] = useState('')
+  const [settingsError, setSettingsError] = useState('')
 
   useEffect(() => {
     if (user) {
       fetchUserData()
+      // Initialize full name from user metadata
+      setFullName(user.user_metadata?.full_name || '')
     }
   }, [user])
 
@@ -169,6 +175,50 @@ export default function Dashboard() {
       console.error('Error fetching user data:', error)
     } finally {
       setLoadingData(false)
+    }
+  }
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingSettings(true)
+    setSettingsError('')
+    setSettingsMessage('')
+
+    try {
+      // Update user metadata in Supabase Auth
+      const { error: authError } = await supabase.auth.updateUser({
+        data: {
+          full_name: fullName
+        }
+      })
+
+      if (authError) throw authError
+
+      // Also update in profiles table if it exists
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user?.id,
+          full_name: fullName,
+          email: user?.email,
+          updated_at: new Date().toISOString()
+        })
+
+      if (profileError) {
+        console.warn('Profile update warning:', profileError)
+        // Don't throw here since auth update succeeded
+      }
+
+      setSettingsMessage('Settings saved successfully!')
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSettingsMessage(''), 3000)
+      
+    } catch (error: any) {
+      console.error('Settings save error:', error)
+      setSettingsError(error.message || 'Failed to save settings')
+    } finally {
+      setSavingSettings(false)
     }
   }
 
@@ -425,33 +475,74 @@ export default function Dashboard() {
               className="bg-white rounded-2xl shadow-lg p-8"
             >
               <h3 className="text-xl font-semibold text-gray-900 mb-6">Account Settings</h3>
-              <div className="space-y-6">
+              
+              {/* Success/Error Messages */}
+              {settingsMessage && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
+                  <p className="text-green-700 text-sm">{settingsMessage}</p>
+                </div>
+              )}
+              {settingsError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6">
+                  <p className="text-red-700 text-sm">{settingsError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveSettings} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   <input
                     type="email"
                     value={user.email || ''}
                     disabled
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
                   />
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
                 </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                   <input
                     type="text"
-                    value={user.user_metadata?.full_name || ''}
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     placeholder="Enter your full name"
+                    required
                   />
                 </div>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
-                >
-                  Save Changes
-                </motion.button>
-              </div>
+
+                <div className="flex items-center space-x-4">
+                  <motion.button
+                    type="submit"
+                    disabled={savingSettings}
+                    whileHover={{ scale: savingSettings ? 1 : 1.02 }}
+                    whileTap={{ scale: savingSettings ? 1 : 0.98 }}
+                    className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    {savingSettings ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <span>Save Changes</span>
+                    )}
+                  </motion.button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFullName(user.user_metadata?.full_name || '')
+                      setSettingsError('')
+                      setSettingsMessage('')
+                    }}
+                    className="text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </form>
             </motion.div>
           )}
         </div>
