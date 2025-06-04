@@ -33,10 +33,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // Get initial session
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.warn('Session error:', error)
+          // Clear any invalid session data
+          setSession(null)
+          setUser(null)
+        } else {
+          setSession(session)
+          setUser(session?.user ?? null)
+        }
+      } catch (error) {
+        console.warn('Auth initialization error:', error)
+        setSession(null)
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
     }
 
     getSession()
@@ -44,8 +59,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
+        console.log('Auth state changed:', event, session?.user?.email)
+        
+        if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+          setSession(session)
+          setUser(session?.user ?? null)
+        } else if (event === 'SIGNED_IN') {
+          setSession(session)
+          setUser(session?.user ?? null)
+        } else {
+          setSession(session)
+          setUser(session?.user ?? null)
+        }
+        
         setLoading(false)
       }
     )
@@ -75,13 +101,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    return { error }
+    try {
+      // Clear the session locally first
+      setSession(null)
+      setUser(null)
+      
+      // Attempt to sign out from Supabase
+      const { error } = await supabase.auth.signOut()
+      
+      // Even if there's an error (like session not found), 
+      // we've already cleared the local state, so return success
+      if (error && error.message !== "Session from session_id claim in JWT does not exist") {
+        console.warn('Sign out error:', error)
+        // Don't throw for session_not_found errors since user is effectively signed out
+      }
+      
+      return { error: null }
+    } catch (error) {
+      console.warn('Sign out error:', error)
+      // Still clear local state even if server sign out fails
+      setSession(null)
+      setUser(null)
+      return { error: null }
+    }
   }
 
   const resetPassword = async (email: string) => {
+    // Get current URL for redirect
+    const redirectUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/auth/reset-password`
+      : `${process.env.NEXT_PUBLIC_SITE_URL}/auth/reset-password`
+      
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
+      redirectTo: redirectUrl,
     })
     return { data, error }
   }

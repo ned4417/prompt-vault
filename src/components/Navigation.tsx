@@ -43,10 +43,17 @@ export default function Navigation() {
   ]
 
   const handleSignOut = async () => {
-    await signOut()
-    setUserMenuOpen(false)
-    // Redirect to home page after sign out
-    router.push('/')
+    try {
+      await signOut()
+      setUserMenuOpen(false)
+      // Redirect to home page after sign out
+      router.push('/')
+    } catch (error) {
+      console.warn('Sign out error in navigation:', error)
+      // Force clear and redirect even if sign out failed
+      setUserMenuOpen(false)
+      router.push('/')
+    }
   }
 
   const openAuthModal = (mode: 'signin' | 'signup') => {
