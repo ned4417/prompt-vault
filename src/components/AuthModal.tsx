@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -23,6 +24,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }: A
   const [message, setMessage] = useState('')
 
   const { signIn, signUp, resetPassword } = useAuth()
+  const router = useRouter()
 
   const resetForm = () => {
     setEmail('')
@@ -45,6 +47,8 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }: A
         if (error) throw error
         onClose()
         resetForm()
+        // Redirect to dashboard after successful login
+        router.push('/dashboard')
       } else if (mode === 'signup') {
         const { error } = await signUp(email, password, fullName)
         if (error) throw error

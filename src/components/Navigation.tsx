@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { MagnifyingGlassIcon, Bars3Icon, XMarkIcon, SparklesIcon, UserCircleIcon } from '@heroicons/react/24/outline'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 import AuthModal from './AuthModal'
 
 export default function Navigation() {
@@ -16,6 +17,7 @@ export default function Navigation() {
   const [mounted, setMounted] = useState(false)
 
   const { user, signOut, loading } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     setMounted(true)
@@ -43,6 +45,8 @@ export default function Navigation() {
   const handleSignOut = async () => {
     await signOut()
     setUserMenuOpen(false)
+    // Redirect to home page after sign out
+    router.push('/')
   }
 
   const openAuthModal = (mode: 'signin' | 'signup') => {
