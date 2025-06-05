@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import AuthModal from './AuthModal'
+import TokenBalance from './TokenBalance'
+import TokenPurchaseModal from './TokenPurchaseModal'
 
 export default function Navigation() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -15,6 +17,7 @@ export default function Navigation() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [showTokenModal, setShowTokenModal] = useState(false)
 
   const { user, signOut, loading } = useAuth()
   const router = useRouter()
@@ -197,6 +200,8 @@ export default function Navigation() {
                 <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
               ) : user ? (
                 /* Logged In User Menu */
+                <>
+                <TokenBalance onPurchaseClick={() => setShowTokenModal(true)} />
                 <div className="relative">
                   <button
                     onClick={(e) => {
@@ -261,6 +266,7 @@ export default function Navigation() {
                     )}
                   </AnimatePresence>
                 </div>
+                </>
               ) : (
                 /* Not Logged In - Auth Buttons */
                 <div className="hidden sm:flex items-center space-x-3">
@@ -415,6 +421,11 @@ export default function Navigation() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         defaultMode={authMode}
+      />
+
+      <TokenPurchaseModal 
+        isOpen={showTokenModal} 
+        onClose={() => setShowTokenModal(false)} 
       />
     </>
   )
