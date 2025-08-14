@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [loadingData, setLoadingData] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedPrompt, setSelectedPrompt] = useState<PurchasedPrompt | null>(null)
+  const [transactions, setTransactions] = useState<any[]>([])
   
   // Settings form state
   const [fullName, setFullName] = useState('')
@@ -129,6 +130,43 @@ export default function Dashboard() {
 
       if (purchasesError) throw purchasesError
       if (allPurchasesError) throw allPurchasesError
+
+      // Fetch transaction history combining purchases and token transactions
+      const { data: purchaseTransactions, error: purchaseTransactionsError } = await supabase
+        .from('purchases')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('purchased_at', { ascending: false })
+
+      const { data: tokenTransactions, error: tokenTransactionsError } = await supabase
+        .from('token_transactions')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+
+      // Combine and format all transactions
+      const allTransactions = [
+        ...(purchaseTransactions?.map(t => ({
+          id: t.id,
+          type: t.purchase_type || 'purchase',
+          amount: `$${t.amount.toFixed(2)}`,
+          description: t.purchase_type === 'tokens' 
+            ? `${t.tokens_received} tokens purchased`
+            : 'Prompt purchase',
+          date: t.purchased_at,
+          status: t.status
+        })) || []),
+        ...(tokenTransactions?.map(t => ({
+          id: t.id,
+          type: t.type,
+          amount: `${t.amount} tokens`,
+          description: t.description || 'Token transaction',
+          date: t.created_at,
+          status: 'completed'
+        })) || [])
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+      setTransactions(allTransactions)
 
       // Fetch free prompts (available to all users)
       const { data: freePrompts, error: freePromptsError } = await supabase
@@ -391,6 +429,7 @@ export default function Dashboard() {
               {[
                 { id: 'overview', name: 'My Prompts', icon: DocumentTextIcon },
                 { id: 'subscription', name: 'Subscription', icon: CreditCardIcon },
+                { id: 'transactions', name: 'Transactions', icon: ChartBarIcon },
                 { id: 'settings', name: 'Settings', icon: CogIcon }
               ].map((tab) => (
                 <button
@@ -497,6 +536,73 @@ export default function Dashboard() {
                             View Prompt
                           </motion.button>
                         </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {activeTab === 'transactions' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="bg-white rounded-2xl shadow-lg p-8"
+            >
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Transaction History</h3>
+              
+              {transactions.length === 0 ? (
+                <div className="text-center py-16">
+                  <ChartBarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No transactions yet</h3>
+                  <p className="text-gray-600">Your purchase history will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {transactions.map((transaction, index) => (
+                    <motion.div
+                      key={transaction.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          transaction.type === 'purchase' || transaction.type === 'tokens' 
+                            ? 'bg-green-100 text-green-600' 
+                            : 'bg-blue-100 text-blue-600'
+                        }`}>
+                          {transaction.type === 'purchase' || transaction.type === 'tokens' ? (
+                            <SparklesIcon className="w-5 h-5" />
+                          ) : (
+                            <CreditCardIcon className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{transaction.description}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(transaction.date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">{transaction.amount}</p>
+                        <p className={`text-sm capitalize ${
+                          transaction.status === 'completed' 
+                            ? 'text-green-600' 
+                            : 'text-yellow-600'
+                        }`}>
+                          {transaction.status}
+                        </p>
                       </div>
                     </motion.div>
                   ))}
