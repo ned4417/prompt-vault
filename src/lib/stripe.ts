@@ -314,8 +314,6 @@ async function addTokensToUser(
                 amount: amount, // This is the price in cents
                 currency: 'usd',
                 status: 'completed',
-                purchase_type: 'tokens',
-                tokens_received: tokens,
                 purchased_at: new Date().toISOString()
             })
 
