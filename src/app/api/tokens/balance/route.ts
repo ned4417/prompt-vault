@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '../../../../lib/supabase'
+import { createClient } from '@supabase/supabase-js'
+
+// Create admin client for server-side operations
+const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    }
+)
 
 export async function GET(request: NextRequest) {
     try {
@@ -10,11 +22,14 @@ export async function GET(request: NextRequest) {
         }
 
         // Get user's token balance
-        const { data: tokenBalance, error } = await supabase
+        console.log('Fetching token balance for user:', userId)
+        const { data: tokenBalance, error } = await supabaseAdmin
             .from('user_tokens')
-            .select('tokens, last_updated')
+            .select('tokens, lifetime_tokens, last_updated')
             .eq('user_id', userId)
             .single()
+            
+        console.log('Token balance query result:', { tokenBalance, error })
 
         if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
             throw error
