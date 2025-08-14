@@ -288,7 +288,7 @@ async function addTokensToUser(
             throw tokenError
         }
 
-        // Record the transaction
+        // Record the transaction in token_transactions
         const { error: transactionError } = await supabaseAdmin
             .from('token_transactions')
             .insert({
@@ -302,6 +302,25 @@ async function addTokensToUser(
 
         if (transactionError) {
             console.error('Error recording token transaction:', transactionError)
+            // Don't throw here - tokens were still added successfully
+        }
+
+        // Also record in purchases table for dashboard stats
+        const { error: purchaseError } = await supabaseAdmin
+            .from('purchases')
+            .insert({
+                user_id: userId,
+                stripe_payment_intent_id: paymentIntentId,
+                amount: amount, // This is the price in cents
+                currency: 'usd',
+                status: 'completed',
+                purchase_type: 'tokens',
+                tokens_received: tokens,
+                purchased_at: new Date().toISOString()
+            })
+
+        if (purchaseError) {
+            console.error('Error recording purchase:', purchaseError)
             // Don't throw here - tokens were still added successfully
         }
 

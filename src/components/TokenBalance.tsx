@@ -16,6 +16,19 @@ export default function TokenBalance({ onPurchaseClick, showPurchaseButton = tru
     if (user) {
       fetchTokenBalance()
     }
+
+    // Listen for custom refresh event
+    const handleRefresh = () => {
+      if (user) {
+        fetchTokenBalance()
+      }
+    }
+
+    window.addEventListener('refreshTokenBalance', handleRefresh)
+    
+    return () => {
+      window.removeEventListener('refreshTokenBalance', handleRefresh)
+    }
   }, [user])
 
   const fetchTokenBalance = async () => {

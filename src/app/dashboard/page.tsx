@@ -54,12 +54,43 @@ export default function Dashboard() {
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsMessage, setSettingsMessage] = useState('')
   const [settingsError, setSettingsError] = useState('')
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
 
   useEffect(() => {
     if (user) {
       fetchUserData()
       // Initialize full name from user metadata
       setFullName(user.user_metadata?.full_name || '')
+
+      // Check if returning from successful payment
+      const urlParams = new URLSearchParams(window.location.search)
+      const sessionStatus = urlParams.get('session')
+      const sessionType = urlParams.get('type')
+      if (sessionStatus === 'success') {
+        // Show success notification
+        setPaymentSuccess(true)
+        
+        // Dispatch custom event to refresh token balance
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('refreshTokenBalance'))
+        }, 1000)
+        
+        // Refresh dashboard stats after token purchase
+        if (sessionType === 'tokens') {
+          setTimeout(() => {
+            fetchUserData() // This will refresh all stats including total spent and purchases
+          }, 1500)
+        }
+        
+        // Hide success message after 5 seconds
+        setTimeout(() => {
+          setPaymentSuccess(false)
+        }, 5000)
+        
+        // Clean up URL parameters
+        const cleanUrl = window.location.pathname
+        window.history.replaceState({}, document.title, cleanUrl)
+      }
     }
   }, [user])
 
@@ -89,7 +120,15 @@ export default function Dashboard() {
         .not('prompt_id', 'is', null)
         .order('purchased_at', { ascending: false })
 
+      // Also fetch all purchases (including token purchases) for stats
+      const { data: allPurchases, error: allPurchasesError } = await supabase
+        .from('purchases')
+        .select('amount, purchased_at, purchase_type')
+        .eq('user_id', user?.id)
+        .order('purchased_at', { ascending: false })
+
       if (purchasesError) throw purchasesError
+      if (allPurchasesError) throw allPurchasesError
 
       // Fetch free prompts (available to all users)
       const { data: freePrompts, error: freePromptsError } = await supabase
@@ -155,8 +194,9 @@ export default function Dashboard() {
 
       setPurchasedPrompts(allPrompts)
 
-      // Calculate user stats (only from actual purchases)
-      const totalSpent = purchases?.reduce((sum, p) => sum + p.amount, 0) || 0
+      // Calculate user stats (from all purchases including tokens)
+      const totalSpent = allPurchases?.reduce((sum, p) => sum + (p.amount / 100), 0) || 0 // Convert cents to dollars
+      const totalPurchases = allPurchases?.length || 0
       const categories = allPrompts.map(p => p.category)
       const favoriteCategory = categories.length > 0 
         ? categories.reduce((a, b, i, arr) => 
@@ -165,7 +205,7 @@ export default function Dashboard() {
         : 'Business'
 
       setStats({
-        totalPurchases: purchases?.length || 0,
+        totalPurchases,
         totalSpent,
         promptsOwned: allPrompts.length,
         favoriteCategory
@@ -302,6 +342,26 @@ export default function Dashboard() {
             <p className="text-gray-600">Here's your prompt collection and account overview.</p>
           </motion.div>
         </div>
+
+        {/* Payment Success Notification */}
+        {paymentSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-green-50 border border-green-200 rounded-xl p-4 mb-8"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <SparklesIcon className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-green-800 font-semibold">Payment Successful!</h3>
+                <p className="text-green-700 text-sm">Your tokens have been added to your account. Token balance will update shortly.</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
