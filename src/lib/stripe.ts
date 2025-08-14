@@ -84,11 +84,22 @@ export async function createTokenCheckoutSession(
     successUrl: string,
     cancelUrl: string
 ) {
+    console.log('createTokenCheckoutSession called with:', { packageId, userId })
+    
+    // Check if Stripe is properly initialized
+    if (!process.env.STRIPE_SECRET_KEY) {
+        console.error('STRIPE_SECRET_KEY environment variable is missing')
+        throw new Error('Stripe configuration error: Missing secret key')
+    }
+
     const tokenPackage = TOKEN_PACKAGES[packageId]
 
     if (!tokenPackage) {
+        console.error('Invalid token package ID:', packageId)
         throw new Error('Invalid token package')
     }
+
+    console.log('Token package found:', tokenPackage)
 
     const totalTokens = tokenPackage.tokens + (tokenPackage.bonus || 0)
 
