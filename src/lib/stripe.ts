@@ -1,9 +1,22 @@
 import Stripe from 'stripe'
+import { createClient } from '@supabase/supabase-js'
 import { TokenPackage, SubscriptionPlan } from '../types/models'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2023-10-16', // Use the supported API version
 })
+
+// Create admin client for server-side operations
+const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    }
+)
 
 // Token packages configuration
 export const TOKEN_PACKAGES: Record<string, TokenPackage> = {
@@ -231,29 +244,62 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     // This would integrate with your Supabase database
 }
 
-// Database helper functions (integrate with your Supabase setup)
+// Database helper functions
 async function addTokensToUser(
     userId: string,
     tokens: number,
     paymentIntentId: string,
     amount: number
 ) {
-    // This would integrate with your Supabase database
-    // Example implementation:
-    /*
-    const { error } = await supabase
-      .from('user_tokens')
-      .upsert({
-        user_id: userId,
-        tokens: tokens,
-        payment_intent_id: paymentIntentId,
-        amount: amount,
-        created_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id',
-        ignoreDuplicates: false
-      })
-    */
+    try {
+        // First, get current balance
+        const { data: currentBalance, error: balanceError } = await supabaseAdmin
+            .from('user_tokens')
+            .select('tokens')
+            .eq('user_id', userId)
+            .single()
+
+        const newBalance = (currentBalance?.tokens || 0) + tokens
+
+        // Update or insert user tokens
+        const { error: tokenError } = await supabaseAdmin
+            .from('user_tokens')
+            .upsert({
+                user_id: userId,
+                tokens: newBalance,
+                last_updated: new Date().toISOString()
+            }, {
+                onConflict: 'user_id'
+            })
+
+        if (tokenError) {
+            console.error('Error updating user tokens:', tokenError)
+            throw tokenError
+        }
+
+        // Record the transaction
+        const { error: transactionError } = await supabaseAdmin
+            .from('token_transactions')
+            .insert({
+                user_id: userId,
+                amount: tokens,
+                type: 'purchase',
+                description: `Token purchase - ${tokens} tokens`,
+                stripe_payment_intent_id: paymentIntentId,
+                created_at: new Date().toISOString()
+            })
+
+        if (transactionError) {
+            console.error('Error recording token transaction:', transactionError)
+            // Don't throw here - tokens were still added successfully
+        }
+
+        console.log(`Successfully added ${tokens} tokens to user ${userId}. New balance: ${newBalance}`)
+        
+    } catch (error) {
+        console.error('Error adding tokens to user:', error)
+        throw error
+    }
 }
 
 async function createOrUpdateSubscription(
@@ -262,23 +308,45 @@ async function createOrUpdateSubscription(
     stripeCustomerId: string,
     planId: string
 ) {
-    // This would integrate with your Supabase database
-    // Example implementation:
-    /*
-    const plan = SUBSCRIPTION_PLANS[planId as keyof typeof SUBSCRIPTION_PLANS]
-    
-    const { error } = await supabase
-      .from('subscriptions')
-      .upsert({
-        user_id: userId,
-        stripe_subscription_id: stripeSubscriptionId,
-        stripe_customer_id: stripeCustomerId,
-        plan_id: planId,
-        tokens_per_month: plan.tokens,
-        status: 'active',
-        updated_at: new Date().toISOString()
-      })
-    */
+    try {
+        const plan = SUBSCRIPTION_PLANS[planId as keyof typeof SUBSCRIPTION_PLANS]
+        
+        if (!plan) {
+            throw new Error(`Invalid plan ID: ${planId}`)
+        }
+
+        // Get subscription details from Stripe
+        const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+        
+        const { error } = await supabaseAdmin
+            .from('subscriptions')
+            .upsert({
+                user_id: userId,
+                stripe_subscription_id: stripeSubscriptionId,
+                stripe_customer_id: stripeCustomerId,
+                status: subscription.status,
+                current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+                current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+                cancel_at_period_end: subscription.cancel_at_period_end,
+                plan_name: plan.name,
+                plan_amount: plan.price,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'stripe_subscription_id'
+            })
+
+        if (error) {
+            console.error('Error creating/updating subscription:', error)
+            throw error
+        }
+
+        console.log(`Successfully created/updated subscription for user ${userId}`)
+        
+    } catch (error) {
+        console.error('Error creating/updating subscription:', error)
+        throw error
+    }
 }
 
 export default stripe

@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createTokenCheckoutSession, createSubscriptionCheckoutSession } from '../../../../lib/stripe'
-import { supabase } from '../../../../lib/supabase'
+import { createClient } from '@supabase/supabase-js'
+
+// Create admin client for server-side operations
+const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    }
+)
 
 export async function POST(request: NextRequest) {
     try {
@@ -11,7 +23,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get user email from Supabase
-        const { data: user, error: userError } = await supabase.auth.admin.getUserById(userId)
+        const { data: user, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId)
 
         if (userError || !user) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
