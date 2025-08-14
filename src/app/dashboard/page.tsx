@@ -195,7 +195,7 @@ export default function Dashboard() {
       setPurchasedPrompts(allPrompts)
 
       // Calculate user stats (from all purchases including tokens)
-      const totalSpent = allPurchases?.reduce((sum, p) => sum + (p.amount / 100), 0) || 0 // Convert cents to dollars
+      const totalSpent = allPurchases?.reduce((sum, p) => sum + p.amount, 0) || 0 // Amount is already in dollars
       const totalPurchases = allPurchases?.length || 0
       const categories = allPrompts.map(p => p.category)
       const favoriteCategory = categories.length > 0 
