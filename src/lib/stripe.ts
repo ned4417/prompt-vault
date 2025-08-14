@@ -311,10 +311,12 @@ async function addTokensToUser(
             .insert({
                 user_id: userId,
                 stripe_payment_intent_id: paymentIntentId,
-                amount: amount, // This is the price in cents
+                amount: amount / 100, // Convert cents to dollars for the numeric field
                 currency: 'usd',
                 status: 'completed',
-                purchased_at: new Date().toISOString()
+                purchased_at: new Date().toISOString(),
+                tokens_received: tokens,
+                purchase_type: 'tokens' // Explicitly set to 'tokens' instead of default 'prompt'
             })
 
         if (purchaseError) {
